@@ -46,12 +46,10 @@ autocmd({"BufWritePre"}, {
     command = [[%s/\s\+$//e]],
 })
 
-local themes = {"sunset_cloud", "radioactive_waste", "forest_stream", "crimson_moonlight"}
-
 autocmd('BufEnter', {
     group = ThePrimeagenGroup,
     callback = function()
-        vim.cmd.colorscheme("catppuccin-macchiato")
+        vim.cmd.colorscheme("catppuccin-frappe")
     end
 })
 
