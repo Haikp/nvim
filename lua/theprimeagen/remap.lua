@@ -17,6 +17,8 @@ vim.keymap.set("n", "n", "nzzzv")
 vim.keymap.set("n", "N", "Nzzzv")
 vim.keymap.set("n", "<leader>zig", "<cmd>LspRestart<cr>")
 
+vim.keymap.set("n", "gd", vim.lsp.buf.definition, { noremap = true, silent = true })
+
 -- cmake keymaps
 -- dispatch compile and run cmake files
 -- vim.keymap.set("n", "<leader>dc", ":Dispatch make<CR>")
@@ -56,33 +58,20 @@ else
   ARCH = "Unknown"  -- In case the architecture can't be determined
 end
 
-local build_type = "Release"
-
--- vim.keymap.set("n", "<leader>dcr", function()
---   local cwd = vim.fn.getcwd()  -- Get current working directory
---   vim.cmd("Dispatch cmake " .. cwd .. " -DCMAKE_BUILD_TYPE=Release")
---     build_type = "Release"
--- end)
---
--- vim.keymap.set("n", "<leader>dcd", function()
---   local cwd = vim.fn.getcwd()  -- Get current working directory
---   vim.cmd("Dispatch cmake " .. cwd .. " -DCMAKE_BUILD_TYPE=Debug")
---     build_type = "Debug"
--- end)
+local build_type = "Debug"
 
 local function find_cmake_root()
   local file_dir = vim.fn.expand("%:p:h")  -- Start from the directory of the currently opened file
   local cwd = vim.fn.getcwd()              -- Stop searching when we reach the working directory
   local cmake_dir = file_dir
 
-  if vim.fn.filereadable(cmake_dir .. "/CMakeLists.txt") == 1 then
-    return cmake_dir
-  end
-
   -- Traverse upwards to find the nearest CMakeLists.txt
-  while cmake_dir ~= "/" and cmake_dir ~= "" and cmake_dir ~= cwd do
+  while cmake_dir ~= "/" and cmake_dir ~= "" do
     if vim.fn.filereadable(cmake_dir .. "/CMakeLists.txt") == 1 then
       return cmake_dir
+    end
+    if cmake_dir == cwd then  -- Allow checking cwd before stopping
+      break
     end
     cmake_dir = vim.fn.fnamemodify(cmake_dir, ":h")  -- Move up a directory
   end
@@ -91,24 +80,13 @@ local function find_cmake_root()
   return nil
 end
 
-local function configure_cmake(build_type)
+local function configure_cmake(new_build_type)
+  build_type = new_build_type
   local cmake_root = find_cmake_root()
   if not cmake_root then return end  -- Exit if no CMakeLists.txt is found
 
-  local content = vim.fn.readfile(cmake_root .. "/CMakeLists.txt")
-  local project_name
+  local build_dir = cmake_root .. "/build" -- .. "/" .. project_name
 
-    -- Search for the project name using a regular expression
-    for _, line in ipairs(content) do
-      project_name = string.match(line, "project%s*%(s*([^%s%)]+)%s*%)")
-      if project_name then
-        break
-      end
-    end
-
-  local build_dir = vim.fn.getcwd() .. "/build" .. "/" .. project_name
-
-  vim.g.cmake_build_type = build_type  -- Store build type globally
   vim.cmd("Dispatch cmake -S " .. cmake_root .. " -B " .. build_dir .. " -DCMAKE_BUILD_TYPE=" .. build_type)
 end
 
@@ -125,22 +103,16 @@ local function dispatch_make()
   local cmake_root = find_cmake_root()
   if not cmake_root then return end  -- Exit if no CMakeLists.txt is found
 
-  local content = vim.fn.readfile(cmake_root .. "/CMakeLists.txt")
-  local project_name
-
-    -- Search for the project name using a regular expression
-    for _, line in ipairs(content) do
-      project_name = string.match(line, "project%s*%(s*([^%s%)]+)%s*%)")
-      if project_name then
-        break
-      end
-    end
-  local build_dir = vim.fn.getcwd() .. "/build" .. "/" .. project_name
+  local build_dir = cmake_root .. "/build" -- .. "/" .. project_name
 
   -- Ensure build directory exists
   if vim.fn.isdirectory(build_dir) == 0 then
-    print("Build directory not found! Run CMake configure first.")
-    return
+    if vim.fn.isdirectory("/build") == 0 then
+      print("Build directory not found! Run CMake configure first.")
+      return
+    end
+
+    build_dir = "/build"
   end
 
   -- Run Dispatch make in the detected build directory
@@ -153,19 +125,7 @@ local function dispatch_run_executable()
   local cmake_root = find_cmake_root()
   if not cmake_root then return end  -- Exit if no CMakeLists.txt is found
 
-  local content = vim.fn.readfile(cmake_root .. "/CMakeLists.txt")
-  local project_name
-
-    -- Search for the project name using a regular expression
-    for _, line in ipairs(content) do
-      project_name = string.match(line, "project%s*%(s*([^%s%)]+)%s*%)")
-      if project_name then
-        break
-      end
-    end
-
-  -- Determine the build folder (which is typically located in the build folder)
-  local build_dir = vim.fn.getcwd() .. "/build" .. "/" .. project_name
+  local build_dir = cmake_root .. "/build" -- .. "/" .. project_name
 
   -- Construct the executable path using the build directory
   local exec_path = build_dir .. "/bin/" .. OS_TYPE .. ARCH .. "/" .. build_type .. "/app"
@@ -183,6 +143,18 @@ end)
 vim.keymap.set("n", "<leader>svwm", function()
     require("vim-with-me").StopVimWithMe()
 end)
+
+-- learning PBR, new remaps start here for
+vim.keymap.set("n", "<leader>tr", function()
+  vim.cmd("botright new")  -- opens terminal at bottom
+  vim.cmd("resize 15")     -- resize height
+  vim.cmd("term ./build/bin/" .. OS_TYPE .. ARCH .. "/" .. build_type .. "/app")
+--  vim.cmd("startinsert")   -- auto enter terminal mode
+end, { desc = "Run raytracer in terminal" })
+
+vim.keymap.set("n", "<leader>dp", function()
+  vim.cmd("!display src/output.ppm")
+end, { noremap = true, silent = true, desc = "View output.ppm image with display" })
 
 -- greatest remap ever
 vim.keymap.set("x", "<leader>p", [["_dP]])
